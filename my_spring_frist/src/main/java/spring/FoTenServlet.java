@@ -1,10 +1,7 @@
 package spring;
 
 
-import spring.annitation.FoTenAutowire;
-import spring.annitation.FoTenController;
-import spring.annitation.FoTenRequestMapping;
-import spring.annitation.FoTenService;
+import spring.annitation.*;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
@@ -14,6 +11,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
@@ -75,34 +73,58 @@ public class FoTenServlet extends HttpServlet {
             return;
         }
 
-        //获取URL里面的参数
-        Map<String,String[]> param = req.getParameterMap();
-
         Method method = (Method) this.handlerMapping.get(url);
 
+        //1.形参位置和参数名字先建立映射，做缓存
+        Map<String,Integer> paramIndexMapping = new HashMap<String,Integer>();
+        Annotation[][] pa = method.getParameterAnnotations();
+        for (int i = 0 ; i<pa.length;i++){
+            for (Annotation a : pa[i]){
+                if (a instanceof FoTenParam){
+                    String paramName = ((FoTenParam) a).value();
+                    if (!"".equals(paramName.trim())){
+                        paramIndexMapping.put(paramName,i);
+                    }
+                }
+            }
+        }
+        Class<?>[] parameterTypes = method.getParameterTypes();
+        for (int i = 0; i < parameterTypes.length; i++) {
+            Class<?> type = parameterTypes[i];
+            if (type == HttpServletRequest.class || type == HttpServletResponse.class){
+                paramIndexMapping.put(type.getName(),i);
+            }
+        }
+        //2.根据参数位置匹配参数名字，从URL中取到参数名字对应的值
+        Object[] paramValues = new Object[parameterTypes.length];
+        //获取URL里面的参数
+        Map<String,String[]> params = req.getParameterMap();
+        for (Map.Entry<String,String[]> param : params.entrySet()){
 
-        /**
-         * 待实现参数映射
-         */
-//        //1.形参位置和参数名字先建立映射，做缓存
-//        Map<String,Integer> paramIndexMapping = new HashMap<>();
-//        Annotation[][] pa = method.getParameterAnnotations();
-//        for (int i = 0 ; i<pa.length;i++){
-//            for (Annotation a : pa[i]){
-//                if (a instanceof param){
-//                    String paramName
-//                }
-//            }
-//        }
-//        //2.根据参数位置匹配参数名字，从URL中取到参数名字对应的值
+            String value = Arrays.toString(param.getValue())
+                    .replaceAll("\\[|\\]","")
+                    .replaceAll("\\s","");
 
+            if (!paramIndexMapping.containsKey(param.getKey())){ continue; }
+            int index = paramIndexMapping.get(param.getKey());
 
+            //涉及到类的强制转换
+            paramValues[index] = value;
+        }
+
+        if (paramIndexMapping.containsKey(HttpServletRequest.class.getName())){
+            int index = paramIndexMapping.get(HttpServletRequest.class.getName());
+            paramValues[index] = req;
+        }
+        if (paramIndexMapping.containsKey(HttpServletResponse.class.getName())){
+            int index = paramIndexMapping.get(HttpServletResponse.class.getName());
+            paramValues[index] = resp;
+        }
 
         //反射拿类名
         String beanName = toLowerFirstCase(method.getDeclaringClass().getSimpleName());
-        //3.组成动态实际参数列表，传递反射调用(暂时硬编码保证其他工能可用)
-        method.invoke(ioc.get(beanName),new Object[]{req,resp,param.get("name")[0]});
-
+        //3.组成动态实际参数列表，传递反射调用
+        method.invoke(ioc.get(beanName),paramValues);
 
     }
 
