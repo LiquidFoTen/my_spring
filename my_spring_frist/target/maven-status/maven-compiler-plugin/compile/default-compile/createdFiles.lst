@@ -1,0 +1,8 @@
+spring\FoTenServlet.class
+spring\service\TestService.class
+spring\annitation\FoTenAutowire.class
+spring\annitation\FoTenService.class
+spring\service\impl\TestServiceImpl.class
+spring\annitation\FoTenRequestMapping.class
+spring\controller\TestController.class
+spring\annitation\FoTenController.class
